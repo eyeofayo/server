@@ -130,6 +130,15 @@ class Server {
             logger.error('Missing required environment variables:', missingEnvVars);
             throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
         }
+
+        // Optional. Billing is on only when both are set; one without the other is a mistake.
+        const stripeVars = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'].filter(varName => process.env[varName]);
+        if (stripeVars.length === 1) {
+            throw new Error(`Billing needs both STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET; only ${stripeVars[0]} is set`);
+        }
+        if (process.env.NODE_ENV !== 'production' && /^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY || '')) {
+            throw new Error('A live Stripe key is only for production. Use a test-mode key (sk_test_... or rk_test_...) here');
+        }
     }
 
     /**
@@ -189,12 +198,14 @@ class Server {
             {default: authRouter},
             {default: userRouter},
             {default: appRouter},
-            {default: cacheRouter}
+            {default: cacheRouter},
+            {default: billingRouter}
         ] = await Promise.all([
             import('./routes/auth.routes.js'),
             import('./routes/user.routes.js'),
             import('./routes/app.routes.js'),
-            import('./routes/cache.routes.js')
+            import('./routes/cache.routes.js'),
+            import('./routes/billing.routes.js')
         ]);
 
         appMiddleware.registerRoutes([
@@ -202,7 +213,8 @@ class Server {
             ...appRouter.validRoutes,
             ...authRouter.validRoutes,
             ...userRouter.validRoutes,
-            ...cacheRouter.validRoutes
+            ...cacheRouter.validRoutes,
+            ...billingRouter.validRoutes
         ]);
 
         // Apply route validation middleware specifically to /api routes
@@ -212,6 +224,7 @@ class Server {
         this.app.use('/api/v1/auth', authRouter);
         this.app.use('/api/v1/users', userRouter);
         this.app.use('/api/v1/cache', cacheRouter);
+        this.app.use('/api/v1/billing', billingRouter);
         this.app.use('/api/v1', appRouter);
 
         // Handle undefined routes
