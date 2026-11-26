@@ -139,6 +139,15 @@ class Server {
         if (process.env.NODE_ENV !== 'production' && /^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY || '')) {
             throw new Error('A live Stripe key is only for production. Use a test-mode key (sk_test_... or rk_test_...) here');
         }
+        // Optional. With it, people pay inside the app's own Billing page instead of on Stripe's page.
+        const publishable = process.env.STRIPE_PUBLISHABLE_KEY;
+        if (publishable) {
+            if (!/^pk_(test|live)_\w+$/.test(publishable)) throw new Error('STRIPE_PUBLISHABLE_KEY must be a publishable key (pk_test_... or pk_live_...)');
+            if (stripeVars.length !== 2) throw new Error('STRIPE_PUBLISHABLE_KEY needs billing on: set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET too');
+            if (publishable.startsWith('pk_live_') !== /^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY)) {
+                throw new Error('STRIPE_PUBLISHABLE_KEY and STRIPE_SECRET_KEY must both be test keys or both be live keys');
+            }
+        }
     }
 
     /**
